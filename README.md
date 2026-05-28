@@ -33,7 +33,7 @@ Every weekday morning at 9AM, the workflow wakes up and does this:
 1. **Searches Apollo.io** for 25 founders, CEOs, and CFOs at small companies (1–50 employees)
 2. **Groups them into batches of 10** so it doesn't overwhelm the APIs
 3. **Sends each email to Hunter.io** to check if it's real and deliverable
-4. **For valid emails:** asks an AI (OpenAI) to write a personalized one-liner based on the
+4. **For valid emails:** asks an AI (DeepSeek) to write a personalized one-liner based on the
    person's job title, company, and industry
 5. **For invalid emails:** marks them as "unverified" and skips them (no wasted outreach)
 6. **Saves every result** to a Google Sheet with all enriched data
@@ -83,9 +83,9 @@ Every weekday morning at 9AM, the workflow wakes up and does this:
 | Tool | Purpose | Cost |
 |---|---|---|
 | **n8n** | Orchestrates the entire workflow | Already have it |
-| **Apollo.io** | Source of prospect data (name, title, company, email) | Free tier: 50 exports/month |
-| **Hunter.io** | Email verification — checks if address is real | Free tier: 25 verifications/month |
-| **OpenAI API** | Writes the personalized icebreaker per lead | Pay-per-use (~$0.01 per lead) |
+| **Apollo.io** | Source of prospect data (name, title, company, email) | Free tier: 50 exports/month — **do not exceed** |
+| **Hunter.io** | Email verification — checks if address is real | Free tier: 25 verifications/month — **batch size set to 10 to stay within limit** |
+| **DeepSeek API** | Writes the personalized icebreaker per lead | Free tier — large token allowance |
 | **Google Sheets** | Stores the enriched lead list | Free |
 | **Slack** | Daily summary notification | Free |
 
@@ -126,9 +126,9 @@ This project proves you can:
 
 ## Resume Bullet (copy this)
 
-> Built n8n lead enrichment pipeline pulling 25 prospects/run from Apollo API, verifying
-> emails via Hunter.io, and generating AI-personalized icebreakers per lead using OpenAI —
-> replacing manual Clay enrichment at ~$5/month vs $800+/month per-seat cost.
+> Built n8n lead enrichment pipeline pulling prospects from Apollo API, verifying emails via
+> Hunter.io, and generating AI-personalized icebreakers per lead using DeepSeek —
+> replacing manual Clay enrichment at near-zero cost vs $800+/month per-seat.
 
 ---
 
