@@ -1,0 +1,758 @@
+{
+  "name": "AI Lead Enrichment Pipeline",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 9,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "f74c80fb-e07c-46e1-9f34-591bcf776f0f",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        256,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/mixed_people/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "person_titles",
+              "value": "[\"Founder\",\"CEO\",\"CFO\",\"Co-Founder\"]"
+            },
+            {
+              "name": "organization_num_employees_ranges",
+              "value": "[\"1,50\"]"
+            },
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "per_page",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "887b7fed-a40c-43da-af12-e8d25d872127",
+      "name": "Fetch Apollo Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        320
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "beEAC2ibjdHtMMeA",
+          "name": "Apollo API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json.data;\nconst emails = data.emails || [];\nif (!emails.length) throw new Error('No leads returned from Hunter domain search');\n\nconst e = emails[0];\nreturn [{\n  json: {\n    name: ((e.first_name || '') + ' ' + (e.last_name || '')).trim(),\n    title: e.position || '',\n    company: data.organization || '',\n    industry: data.industry || '',\n    email: e.value || '',\n    employee_count: String(data.employees || '')\n  }\n}];"
+      },
+      "id": "3c4e0820-8f36-4909-8fa1-aed392ec64a3",
+      "name": "Normalize Leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 10,
+        "options": {}
+      },
+      "id": "7027d3d2-4eb1-426c-9aee-886311d34d4b",
+      "name": "Batch 10",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        924,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.hunter.io/v2/email-verifier",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "email",
+              "value": "={{ $json.email }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "80e77814-08ac-4622-9a89-e71dcba9f3f0",
+      "name": "Verify Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1148,
+        320
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ONjFYllJi46MtcEH",
+          "name": "Hunter API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-email-valid",
+              "leftValue": "={{ $json.data.status }}",
+              "rightValue": "valid",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "78805e57-e1a3-431b-979b-776476244ee9",
+      "name": "Email Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1372,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bp-1",
+              "name": "chatInput",
+              "value": "={{ 'Write ONE cold email opening line (max 20 words) for ' + $('Normalize Leads').item.json.name + ', ' + $('Normalize Leads').item.json.title + ' at ' + $('Normalize Leads').item.json.company + ' (' + $json.industry + ' industry, ' + $('Normalize Leads').item.json.employee_count + ' employees). Reference their role or growth stage. No fluff, no buzzwords. Output the line only. ps.(if employee count and or industry are not included then just ignore them.' }}",
+              "type": "string"
+            },
+            {
+              "id": "bp-2",
+              "name": "name",
+              "value": "={{ $('Normalize Leads').item.json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "bp-3",
+              "name": "title",
+              "value": "={{ $('Normalize Leads').item.json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "bp-4",
+              "name": "company",
+              "value": "={{ $('Normalize Leads').item.json.company }}",
+              "type": "string"
+            },
+            {
+              "id": "bp-5",
+              "name": "industry",
+              "value": "={{ $('Normalize Leads').item.json.industry }}",
+              "type": "string"
+            },
+            {
+              "id": "bp-6",
+              "name": "email",
+              "value": "={{ $('Normalize Leads').item.json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "bp-7",
+              "name": "employee_count",
+              "value": "={{ $('Normalize Leads').item.json.employee_count }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "73cafd2b-b11e-4573-a984-fe0f69c8eb99",
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1596,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Build Prompt').item.json.chatInput }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a cold email copywriter for a fractional CFO firm serving African startups and SMBs. Write short, sharp, human-sounding opening lines. Output the line only — no explanation, no quotes."
+            }
+          ]
+        }
+      },
+      "id": "a6687455-94f5-4619-8310-46d53655d0ea",
+      "name": "Generate Icebreaker",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        1756,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "876caa2d-6f47-4334-8f4d-6a43fd31abe9",
+      "name": "DeepSeek Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [
+        1820,
+        320
+      ],
+      "credentials": {
+        "deepSeekApi": {
+          "id": "U8jDGf5XflOecP12",
+          "name": "DeepSeek account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fv-1",
+              "name": "name",
+              "value": "={{ $('Build Prompt').item.json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "fv-2",
+              "name": "title",
+              "value": "={{ $('Build Prompt').item.json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "fv-3",
+              "name": "company",
+              "value": "={{ $('Build Prompt').item.json.company }}",
+              "type": "string"
+            },
+            {
+              "id": "fv-4",
+              "name": "industry",
+              "value": "={{ $('Build Prompt').item.json.industry }}",
+              "type": "string"
+            },
+            {
+              "id": "fv-5",
+              "name": "email",
+              "value": "={{ $('Build Prompt').item.json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "fv-6",
+              "name": "email_status",
+              "value": "valid",
+              "type": "string"
+            },
+            {
+              "id": "fv-7",
+              "name": "employee_count",
+              "value": "={{ $('Build Prompt').item.json.employee_count }}",
+              "type": "string"
+            },
+            {
+              "id": "fv-8",
+              "name": "icebreaker",
+              "value": "={{ $json.text.trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "fv-9",
+              "name": "enriched_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "08e59aa1-dea6-40a6-9a98-e66c17a7e0ad",
+      "name": "Format Valid Lead",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2044,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "mu-1",
+              "name": "name",
+              "value": "={{ $('Batch 10').item.json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "mu-2",
+              "name": "title",
+              "value": "={{ $('Batch 10').item.json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "mu-3",
+              "name": "company",
+              "value": "={{ $('Batch 10').item.json.company }}",
+              "type": "string"
+            },
+            {
+              "id": "mu-4",
+              "name": "industry",
+              "value": "={{ $('Batch 10').item.json.industry }}",
+              "type": "string"
+            },
+            {
+              "id": "mu-5",
+              "name": "email",
+              "value": "={{ $('Batch 10').item.json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "mu-6",
+              "name": "email_status",
+              "value": "unverified",
+              "type": "string"
+            },
+            {
+              "id": "mu-7",
+              "name": "employee_count",
+              "value": "={{ $('Batch 10').item.json.employee_count }}",
+              "type": "string"
+            },
+            {
+              "id": "mu-8",
+              "name": "icebreaker",
+              "value": "SKIPPED",
+              "type": "string"
+            },
+            {
+              "id": "mu-9",
+              "name": "enriched_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3b083ce8-d408-4a39-bf77-0c6fc61dc1d9",
+      "name": "Mark Unverified",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1596,
+        528
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "a8bf69c0-48e0-46af-b2f6-c7ed06c3cad5",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        2268,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Uo_Wtk2FpJVBk_vFgeA7GpUz-Z3QvEw0iiQ_YyQHbR0",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "name": "={{ $json.name }}",
+            "title": "={{ $json.title }}",
+            "company": "={{ $json.company }}",
+            "industry": "={{ $json.industry }}",
+            "email": "={{ $json.email }}",
+            "email_status": "={{ $json.email_status }}",
+            "employee_count": "={{ $json.employee_count }}",
+            "icebreaker": "={{ $json.icebreaker }}",
+            "enriched_at": "={{ $json.enriched_at }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "industry",
+              "displayName": "industry",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_status",
+              "displayName": "email_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "employee_count",
+              "displayName": "employee_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "icebreaker",
+              "displayName": "icebreaker",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "enriched_at",
+              "displayName": "enriched_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "ee694bc9-32d2-48df-96c0-f41a0115119b",
+      "name": "Save to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [
+        2492,
+        320
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "p5P4J559Jh6k8phB",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst valid = items.filter(i => i.json.email_status === 'valid').length;\nconst skipped = items.filter(i => i.json.email_status === 'unverified').length;\n\nreturn [{\n  json: {\n    summary: `*Lead Enrichment Run Complete* :white_check_mark:\\n>Enriched: *${valid}* leads\\n>Skipped (bad email): *${skipped}*\\n>Total processed: *${items.length}*`\n  }\n}];"
+      },
+      "id": "5bb2abb6-ad59-4c2b-b0c8-f37e7b978ade",
+      "name": "Build Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2716,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0B6C7A01N3",
+          "mode": "id"
+        },
+        "text": "={{ $json.summary }}",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "25523cf8-f28b-4d86-9d70-412b961056d5",
+      "name": "Post Summary",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [
+        2940,
+        320
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "n8iNRz7tBSjbcKsv",
+          "name": "Slack Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Normalize Leads": {
+      "main": [
+        [
+          {
+            "node": "Batch 10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Email": {
+      "main": [
+        [
+          {
+            "node": "Email Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Valid?": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Unverified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Icebreaker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Icebreaker",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Icebreaker": {
+      "main": [
+        [
+          {
+            "node": "Format Valid Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Valid Lead": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Unverified": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Save to Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Sheet": {
+      "main": [
+        [
+          {
+            "node": "Build Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Summary": {
+      "main": [
+        [
+          {
+            "node": "Post Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Apollo Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Apollo Leads": {
+      "main": [
+        [
+          {
+            "node": "Normalize Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch 10": {
+      "main": [
+        [
+          {
+            "node": "Verify Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Africa/Lagos",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true
+  },
+  "versionId": ""
+}
